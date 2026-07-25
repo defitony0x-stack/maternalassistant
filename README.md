@@ -1,4 +1,4 @@
-# Maternal Health Companion — v1
+# Maternal Health Companion v1
 
 MHC turns a user's own health entries (text, file) into three
 concrete outputs — a report, an appointment prep sheet, and an advocacy
