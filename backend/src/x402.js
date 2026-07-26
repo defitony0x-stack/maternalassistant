@@ -22,17 +22,47 @@ export function isPaymentConfigured() {
   return REQUIRED.every((key) => !!process.env[key]);
 }
 
-// Single-skill tools: $0.50 each. Bundle: $2.00 flat (a discount vs. buying
-// all 6 individually at $0.50 — that gap is the whole incentive to choose
-// the bundle, don't let it drift).
+// Single-skill tools: tiered by complexity/sensitivity. Bundle covers all
+// 25 tools — priced to stay a real discount vs. buying individually.
+// The 25 single-skill tools (everything below except the bundle-* and
+// full-package keys) sum to $4.60: the original 16 at $3.10 plus the 9
+// maternal-specific additions at $1.50. full-package holds the same
+// ~29% discount the catalog has always used, so it's priced at $3.25 —
+// if PRICES gains or loses a single-skill tool, recompute this sum and
+// keep full-package at ~71% of it; don't let the two drift apart.
 export const PRICES = {
-  report: "$0.50",
-  prep: "$0.50",
-  letter: "$0.50",
-  "action-items": "$0.50",
-  questions: "$0.50",
-  debrief: "$0.50",
-  "full-package": "$2.00",
+  report: "$0.10",
+  prep: "$0.10",
+  letter: "$0.10",
+  "action-items": "$0.10",
+  questions: "$0.10",
+  debrief: "$0.10",
+  medication: "$0.10",
+  "symptom-timeline": "$0.10",
+  "insurance-claim": "$0.10",
+  "postpartum-checklist": "$0.10",
+  translate: "$0.10",
+  "cost-estimate": "$0.25",
+  "travel-health": "$0.25",
+  insurance: "$0.50",
+  "medication-check": "$0.50",
+  "lab-results": "$0.50",
+  // --- maternal-specific additions (9 tools, sum $1.50) ---
+  "trimester-plan": "$0.10",
+  "birth-plan": "$0.10",
+  "hospital-bag": "$0.10",
+  "pelvic-floor": "$0.10",
+  "growth-tracker": "$0.10",
+  vaccinations: "$0.25",
+  nutrition: "$0.25",
+  "feeding-support": "$0.25",
+  "newborn-care": "$0.25",
+  "bundle-student": "$2.99",
+  "bundle-senior": "$4.99",
+  "bundle-travel": "$3.99",
+  "bundle-chronic": "$5.99",
+  "bundle-family": "$9.99",
+  "full-package": "$3.25",
 };
 
 // OKX signs every REST call (including the x402 facilitator) with
@@ -109,10 +139,34 @@ export async function buildPaymentMiddleware() {
     ...routeConfig("action-items", PRICES["action-items"], "Extract prioritized action items from recent notes"),
     ...routeConfig("questions", PRICES.questions, "Generate a categorized appointment question bank"),
     ...routeConfig("debrief", PRICES.debrief, "Turn fresh visit notes into a structured post-visit debrief"),
+    ...routeConfig("medication", PRICES.medication, "Summarize medications/supplements and doses mentioned in recent notes"),
+    ...routeConfig("symptom-timeline", PRICES["symptom-timeline"], "Build a chronological symptom timeline with trend reads"),
+    ...routeConfig("insurance-claim", PRICES["insurance-claim"], "Summarize care events for an insurance claim or reimbursement request"),
+    ...routeConfig("postpartum-checklist", PRICES["postpartum-checklist"], "Build a postpartum recovery checklist grounded in recent notes"),
+    ...routeConfig("translate", PRICES.translate, "Translate a health note or provider instructions between English and a target language"),
+    ...routeConfig("cost-estimate", PRICES["cost-estimate"], "Organize cost/billing figures already mentioned in recent notes"),
+    ...routeConfig("travel-health", PRICES["travel-health"], "Build a vaccination/travel-health prep checklist from recent notes"),
+    ...routeConfig("insurance", PRICES.insurance, "Organize care events and questions to ask an insurer for eligibility/claims"),
+    ...routeConfig("medication-check", PRICES["medication-check"], "Flag possible duplicate/unclear medication log entries for a pharmacist"),
+    ...routeConfig("lab-results", PRICES["lab-results"], "Organize logged lab result values exactly as reported, no independent interpretation"),
+    ...routeConfig("trimester-plan", PRICES["trimester-plan"], "Group prenatal notes by the trimester/timing the user mentioned"),
+    ...routeConfig("birth-plan", PRICES["birth-plan"], "Draft a birth plan from stated preferences only"),
+    ...routeConfig("hospital-bag", PRICES["hospital-bag"], "Build a hospital bag packing checklist"),
+    ...routeConfig("pelvic-floor", PRICES["pelvic-floor"], "Organize pelvic floor recovery notes and flag concerns for a specialist"),
+    ...routeConfig("growth-tracker", PRICES["growth-tracker"], "Organize logged infant growth measurements, no percentile classification"),
+    ...routeConfig("vaccinations", PRICES.vaccinations, "Vaccination checklist for mother and baby, not a live schedule"),
+    ...routeConfig("nutrition", PRICES.nutrition, "Pregnancy/postpartum nutrition guide, general public info only"),
+    ...routeConfig("feeding-support", PRICES["feeding-support"], "Organize breastfeeding/feeding logs and flag concerns for a lactation consultant"),
+    ...routeConfig("newborn-care", PRICES["newborn-care"], "Newborn care checklist grounded in logged notes"),
+    ...routeConfig("bundle/student", PRICES["bundle-student"], "Student Health Bundle: report, prep, cost breakdown, insurance eligibility guide"),
+    ...routeConfig("bundle/senior", PRICES["bundle-senior"], "Senior Care Bundle: medication summary/check, lab results, insurance eligibility guide"),
+    ...routeConfig("bundle/travel", PRICES["bundle-travel"], "Travel Health Bundle: travel guide, cost breakdown, optional translation"),
+    ...routeConfig("bundle/chronic", PRICES["bundle-chronic"], "Chronic Care Bundle: report, action items, medication summary/check, lab results"),
+    ...routeConfig("bundle/family", PRICES["bundle-family"], "Family Bundle: report, prep, action items for up to 5 members"),
     ...routeConfig(
       "full-package",
       PRICES["full-package"],
-      "Run all 6 skills at once and return one combined document (discounted bundle)"
+      "Run all 25 skills at once and return one combined document (discounted bundle)"
     ),
   };
 

@@ -62,11 +62,12 @@ app.use("/anchor", anchorRoutes);
 app.use("/demo", demoRoutes);
 app.use("/stats", statsRoutes);
 
-// x402 payment gate sits in front of /mcp. It only intercepts the 7
-// specific POST routes it's configured for (src/x402.js) — GET /mcp/tools
-// stays free for discovery. If OKX payment credentials aren't set, this
-// is null and every /mcp/* route runs unmetered: fine for local dev,
-// never acceptable for a real OKX-facing deployment. isPaymentConfigured()
+// x402 payment gate sits in front of /mcp. It only intercepts the paid
+// POST routes it's configured for (src/x402.js: 25 single-skill routes,
+// 5 bundles, and /mcp/full-package) — GET /mcp/tools stays free for
+// discovery. If OKX payment credentials aren't set, this is null and
+// every /mcp/* route runs unmetered: fine for local dev, never
+// acceptable for a real OKX-facing deployment. isPaymentConfigured()
 // is also reported in GET /mcp/tools so an unmetered deployment is
 // self-documenting to anyone/anything calling it, including OKX's own
 // review process.
@@ -81,11 +82,13 @@ if (paymentGate) {
 }
 app.use("/mcp", mcpRoutes);
 
-// /mcp/tools (GET, free) lists all 7 skills including price + invoke path.
-// The 6 single-skill routes and /mcp/full-package (the $2 bundle) are the
-// paid A2MCP surface OKX AI Marketplace calls once the ASP is registered.
-// Same services/* functions as /generate/*, just a different, paid,
-// unauthenticated caller — see src/routes/mcp.js and src/x402.js.
+// /mcp/tools (GET, free) lists all 25 skills plus the 5 fixed-price
+// bundles and /mcp/full-package, each with price + invoke path. The 25
+// single-skill routes, the 5 bundle routes, and /mcp/full-package (the
+// $3.25 discounted catalog bundle) are the paid A2MCP surface OKX AI
+// Marketplace calls once the ASP is registered. Same services/*
+// functions as /generate/*, just a different, paid, unauthenticated
+// caller — see src/routes/mcp.js and src/x402.js.
 
 app.use((err, req, res, next) => {
   console.error(err);
