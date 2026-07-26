@@ -9,6 +9,7 @@ export default function Nav() {
       </div>
       <div className="nav-links">
         <a href="#how-it-works">How it works</a>
+        <a href="#tools">All tools</a>
         <a href="#demo">Try the demo</a>
         <a href="#predictions">Live predictions</a>
         <a href={SOCIAL_LINKS.okxListing} className="nav-cta">

@@ -4,6 +4,10 @@ import Nav from "../components/Nav";
 import Footer from "../components/Footer";
 import StatsStrip from "../components/StatsStrip";
 import PredictionsStrip from "../components/PredictionsStrip";
+import ToolsShowcase from "../components/ToolsShowcase";
+import WhoNeedsIt from "../components/WhoNeedsIt";
+import Testimonials from "../components/Testimonials";
+import UpdatesStrip from "../components/UpdatesStrip";
 import { SOCIAL_LINKS } from "../components/SocialLinks";
 
 export default function Home() {
@@ -52,6 +56,8 @@ export default function Home() {
           <StatsStrip />
         </div>
       </section>
+
+      <WhoNeedsIt />
 
       <main className="container" style={{ paddingBottom: 20 }}>
         <DemoBox />
@@ -109,6 +115,12 @@ export default function Home() {
           </div>
         </div>
 
+        <div style={{ marginTop: 40 }}>
+          <ToolsShowcase />
+        </div>
+
+        <Testimonials />
+
         <div style={{ marginTop: 32 }}>
           <h2 style={{ fontSize: 22, marginBottom: 16 }}>Live predictions</h2>
           <PredictionsStrip />
@@ -120,6 +132,8 @@ export default function Home() {
           healthcare provider. Letters are drafts only and not legal advice.
         </p>
       </main>
+
+      <UpdatesStrip />
 
       <Footer />
     </>
