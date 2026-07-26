@@ -16,7 +16,7 @@ const demoLimiter = rateLimit({
   message: { error: "Demo limit reached. Sign up on OKX AI to continue." },
 });
 
-const DEMO_WORD_LIMIT = 25;
+const DEMO_WORD_LIMIT = 50;
 
 // The demo is a teaser, not the product. Full-length reports/letters are
 // the paid A2MCP service on OKX AI. Truncating here (server-side, so it
