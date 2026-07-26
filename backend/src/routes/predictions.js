@@ -63,7 +63,7 @@ const ALLOWED_TOPICS = [
   "paid sick leave",
   "domestic violence",
 ];
-const DEFAULT_TOPIC = "maternity leave";
+const DEFAULT_TOPIC = "abortion rights";
 
 function resolveTopic(rawTopic) {
   const requested = (rawTopic || DEFAULT_TOPIC).toString().trim().toLowerCase();
@@ -94,11 +94,30 @@ router.get("/info", async (req, res) => {
     if (!resp.ok) throw new Error(`Polymarket API returned ${resp.status}`);
     const searchResults = await resp.json();
 
-    const markets = (searchResults.events || []).slice(0, 5).map((e) => ({
-      id: e.id,
-      question: e.title,
-      slug: e.slug,
-    }));
+    // Polymarket's search is fuzzy/relevance-ranked, not exact — for a
+    // low-volume topic like "maternity leave" with few or no real matching
+    // markets, it can fall back to a loosely-ranked, functionally unrelated
+    // result (e.g. an esports match) rather than returning nothing. Since
+    // showing that is worse than showing nothing, we require the topic's
+    // own words to actually appear in the event before trusting it.
+    const topicWords = topic
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2); // drop "of", "an", etc.
+
+    const isRelevant = (event) => {
+      const haystack = `${event.title || ""} ${event.description || ""}`.toLowerCase();
+      return topicWords.some((w) => haystack.includes(w));
+    };
+
+    const markets = (searchResults.events || [])
+      .filter(isRelevant)
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        question: e.title,
+        slug: e.slug,
+      }));
 
     await query(
       `INSERT INTO predictions_cache (topic, data_json, fetched_at)
