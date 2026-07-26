@@ -10,24 +10,58 @@ const FALLBACK_MAX_AGE_MINUTES = 120;
 
 // This endpoint is public and unauthenticated, so without a whitelist
 // anyone could point it at any Polymarket search term (politics, sports,
-// crypto...) — off-brand for a maternal health product and effectively a
-// free general-purpose Polymarket proxy. Only these topics are servable;
+// crypto...) — off-brand for a maternal/women's health product and
+// effectively a free general-purpose Polymarket proxy. The list below
+// covers pregnancy/postpartum (core product focus), reproductive health
+// and rights, and women's health more broadly, including policy topics
+// that disproportionately affect women. Only these topics are servable;
 // anything else falls back to the default rather than erroring, so a
 // slightly-off request still gets a sensible, on-topic response.
 const ALLOWED_TOPICS = [
+  // Pregnancy & postpartum — core product focus
   "maternity leave",
   "pregnancy",
   "postpartum",
-  "reproductive health",
-  "reproductive rights",
-  "abortion rights",
+  "postpartum depression",
+  "maternal health",
+  "maternal mortality",
   "IVF",
   "fertility",
   "childcare",
   "paid family leave",
+  "family and medical leave act",
+
+  // Reproductive health & rights / policy
+  "reproductive health",
+  "reproductive rights",
+  "abortion rights",
+  "abortion access",
+  "abortion legislation",
+  "birth control",
+  "contraception",
+  "Title X",
+  "Roe v Wade",
+
+  // Women's health more broadly
   "women's health",
-  "maternal health",
-  "maternal mortality",
+  "women's healthcare",
+  "women's health policy",
+  "menopause",
+  "menstrual health",
+  "endometriosis",
+  "PCOS",
+  "breast cancer",
+  "cervical cancer",
+  "ovarian cancer",
+  "gender health equity",
+
+  // Health policy that disproportionately affects women/mothers
+  "healthcare policy",
+  "health insurance policy",
+  "Medicaid",
+  "Affordable Care Act",
+  "paid sick leave",
+  "domestic violence",
 ];
 const DEFAULT_TOPIC = "maternity leave";
 
@@ -45,12 +79,26 @@ router.get("/info", async (req, res) => {
   const topic = resolveTopic(req.query.topic);
 
   try {
-    const url = `https://gamma-api.polymarket.com/markets?closed=false&search=${encodeURIComponent(
+    // NOTE: gamma-api.polymarket.com/markets?search=... does NOT do free-text
+    // search — it silently ignores the param and returns default/trending
+    // markets, which is why this endpoint used to show unrelated markets
+    // (album drops, GTA VI, politics) no matter what topic was requested.
+    // /public-search is Polymarket's actual full-text search endpoint and
+    // returns matching *events* (each with their own markets nested inside),
+    // not a flat markets array, so we flatten events -> our own market shape
+    // below rather than passing the raw response through.
+    const url = `https://gamma-api.polymarket.com/public-search?q=${encodeURIComponent(
       topic
-    )}&limit=5`;
+    )}&limit_per_type=5&events_status=active`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`Polymarket API returned ${resp.status}`);
-    const markets = await resp.json();
+    const searchResults = await resp.json();
+
+    const markets = (searchResults.events || []).slice(0, 5).map((e) => ({
+      id: e.id,
+      question: e.title,
+      slug: e.slug,
+    }));
 
     await query(
       `INSERT INTO predictions_cache (topic, data_json, fetched_at)
