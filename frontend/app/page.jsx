@@ -30,7 +30,7 @@ export default function Home() {
         <div className="container hero-content">
           <span className="eyebrow">Built for mothers, not paperwork</span>
           <h1 className="display">
-            You're carrying enough. Let Us carry the paperwork.
+            You're carrying enough. Let us carry the paperwork.
           </h1>
           <p className="sub">
             Visit summaries, symptoms you didn't write down anywhere, notes
