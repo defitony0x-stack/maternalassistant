@@ -11,9 +11,21 @@ import anchorRoutes from "./routes/anchor.js";
 import demoRoutes from "./routes/demo.js";
 import statsRoutes from "./routes/stats.js";
 import mcpRoutes from "./routes/mcp.js";
+import { mcpProtocolHandler } from "./mcpServer.js";
 import { buildPaymentMiddleware } from "./x402.js";
 
 const app = express();
+
+// Railway auto-injects RAILWAY_ENVIRONMENT (or RAILWAY_ENVIRONMENT_NAME) on
+// every deployment, unlike NODE_ENV, which has to be set manually and is
+// easy to forget. Relying on NODE_ENV alone let this service boot "clean"
+// on Railway with LLM_BASE_URL/LLM_API_KEY/LLM_MODEL missing — the
+// REQUIRED_IN_PRODUCTION guard below silently skipped (NODE_ENV wasn't
+// "production"), while llmClient.js's own check still fired on every real
+// request, producing an instant 500 with no trace of why in the boot log.
+// Treating either signal as "deployed" closes that gap even if NODE_ENV
+// never gets set.
+const IS_DEPLOYED = process.env.NODE_ENV === "production" || Boolean(process.env.RAILWAY_ENVIRONMENT);
 
 // Railway sits in front of this service as a reverse proxy and always
 // sets X-Forwarded-For. Without this, express-rate-limit (routes/users.js,
@@ -27,7 +39,7 @@ app.set("trust proxy", 1);
 const rawOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 if (rawOrigins.length === 0) {
-  if (process.env.NODE_ENV === "production") {
+  if (IS_DEPLOYED) {
     // Fail loudly at boot instead of silently blocking every request.
     // A missing CORS_ORIGIN used to produce allowedOrigins = [""], which
     // rejects every browser request with no clue why in the response.
@@ -42,12 +54,16 @@ if (rawOrigins.length === 0) {
 // way the CORS_ORIGIN check above does. Better a crash-on-boot with a
 // clear message in Railway logs than a 500 on a real user's first request.
 const REQUIRED_IN_PRODUCTION = ["JWT_SECRET", "DATABASE_URL", "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"];
-if (process.env.NODE_ENV === "production") {
-  const missing = REQUIRED_IN_PRODUCTION.filter((key) => !process.env[key]);
-  if (missing.length) {
-    console.error(`Missing required env var(s): ${missing.join(", ")}. Refusing to start in production.`);
+const missingRequired = REQUIRED_IN_PRODUCTION.filter((key) => !process.env[key]);
+if (missingRequired.length) {
+  if (IS_DEPLOYED) {
+    console.error(`Missing required env var(s): ${missingRequired.join(", ")}. Refusing to start in production.`);
     process.exit(1);
   }
+  // Not a detected deployment (plain local dev) — warn instead of exiting,
+  // but say so loudly rather than letting it surface only as a mysterious
+  // fast 500 the first time a generation route is hit.
+  console.warn(`Missing env var(s): ${missingRequired.join(", ")}. LLM-backed routes will fail until these are set.`);
 }
 
 app.use(cors({ origin: rawOrigins, credentials: true }));
@@ -63,6 +79,16 @@ app.use("/predictions", predictionsRoutes);
 app.use("/anchor", anchorRoutes);
 app.use("/demo", demoRoutes);
 app.use("/stats", statsRoutes);
+
+// Real MCP protocol layer (initialize / tools/list / tools/call over
+// Streamable HTTP) — matches exactly "/mcp" and "/mcp/", so it never
+// shadows the priced "/mcp/<skill>" REST routes mounted below. This is
+// what makes POST /mcp/ initialize return a real session instead of the
+// "Cannot POST /mcp/" 404 an MCP client got before. Mounted ahead of the
+// payment gate because payment for tools/call is enforced by the same
+// x402 gate one hop downstream, via the loopback call inside
+// mcpServer.js — see that file's module docstring.
+app.all(["/mcp", "/mcp/"], mcpProtocolHandler);
 
 // x402 payment gate sits in front of /mcp. It only intercepts the 7
 // specific POST routes it's configured for (src/x402.js) — GET /mcp/tools
@@ -83,7 +109,7 @@ try {
 }
 if (paymentGate) {
   app.use(paymentGate);
-} else if (process.env.NODE_ENV === "production") {
+} else if (IS_DEPLOYED) {
   console.warn(
     "x402 payment not configured (OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE / PAY_TO_ADDRESS). " +
       "/mcp/* routes are running UNMETERED in production. Set these before this ASP goes live on OKX."
