@@ -15,6 +15,15 @@ import { buildPaymentMiddleware } from "./x402.js";
 
 const app = express();
 
+// Railway sits in front of this service as a reverse proxy and always
+// sets X-Forwarded-For. Without this, express-rate-limit (routes/users.js,
+// routes/demo.js) throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR on the first
+// request that hits a rate-limited route — and since that throw happens
+// inside async middleware, Express doesn't catch it, so it becomes an
+// unhandled rejection that kills the whole process. `1` trusts exactly one
+// hop (Railway's own edge), which is the correct value for this topology.
+app.set("trust proxy", 1);
+
 const rawOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 if (rawOrigins.length === 0) {
