@@ -63,7 +63,15 @@ app.use("/stats", statsRoutes);
 // is also reported in GET /mcp/tools so an unmetered deployment is
 // self-documenting to anyone/anything calling it, including OKX's own
 // review process.
-const paymentGate = await buildPaymentMiddleware();
+let paymentGate = null;
+try {
+  paymentGate = await buildPaymentMiddleware();
+} catch (err) {
+  // Never let a facilitator-side problem (bad creds, network hiccup, SDK
+  // shape mismatch) take the whole app down and strand every route,
+  // including /mcp itself, behind a crash loop. Log loud, run unmetered.
+  console.error("buildPaymentMiddleware() threw — /mcp/* routes running UNMETERED:", err);
+}
 if (paymentGate) {
   app.use(paymentGate);
 } else if (process.env.NODE_ENV === "production") {
