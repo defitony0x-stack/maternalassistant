@@ -1,0 +1,16 @@
+# Railway deploy config for the Maternal Health Companion backend.
+# Per backend/README.md the Railway project is deployed from this GitHub
+# repo with the root directory set to `backend` and start command `npm start`.
+# This file makes that explicit so Railway boots the Express/MCP backend
+# (which serves the OKX A2MCP endpoint at /mcp) instead of serving nothing.
+
+[build]
+rootDirectory = "backend"
+
+[deploy]
+rootDirectory = "backend"
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
