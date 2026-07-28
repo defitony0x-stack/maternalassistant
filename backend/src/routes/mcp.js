@@ -485,6 +485,9 @@ const TOOLS = [
 ];
 
 router.get("/tools", (req, res) => {
+  // Free catalog. (The authoritative GET /mcp/tools catalog is also served
+  // at the app level in server.js so it stays outside the x402 gate; this
+  // route is kept for direct REST callers hitting the router.)
   res.json({
     tools: TOOLS,
     payment: isPaymentConfigured()

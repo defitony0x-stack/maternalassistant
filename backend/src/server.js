@@ -12,7 +12,8 @@ import demoRoutes from "./routes/demo.js";
 import statsRoutes from "./routes/stats.js";
 import mcpRoutes from "./routes/mcp.js";
 import { mcpProtocolHandler } from "./mcpServer.js";
-import { buildPaymentMiddleware } from "./x402.js";
+import { buildPaymentMiddleware, isPaymentConfigured } from "./x402.js";
+import { TOOLS } from "./routes/mcp.js";
 
 const app = express();
 
@@ -80,6 +81,20 @@ app.use("/anchor", anchorRoutes);
 app.use("/demo", demoRoutes);
 app.use("/stats", statsRoutes);
 
+// Build the x402 payment gate up-front. paymentGate is null when OKX
+// credentials aren't set (local dev); otherwise it gates the 25 priced
+// POST /mcp/<skill> REST routes. Scoped to the /mcp router below — never
+// mounted globally — so the MCP initialize/tools/list handshake and the
+// free GET /mcp/tools catalog are never intercepted by it.
+let paymentGate = null;
+try {
+  paymentGate = await buildPaymentMiddleware();
+} catch (err) {
+  // Never let a facilitator-side problem (bad creds, network hiccup, SDK
+  // shape mismatch) take the whole app down. Log loud, run unmetered.
+  console.error("buildPaymentMiddleware() threw — /mcp/* routes running UNMETERED:", err);
+}
+
 // Real MCP protocol layer (initialize / tools/list / tools/call over
 // Streamable HTTP) — matches exactly "/mcp" and "/mcp/", so it never
 // shadows the priced "/mcp/<skill>" REST routes mounted below. This is
@@ -90,32 +105,39 @@ app.use("/stats", statsRoutes);
 // mcpServer.js — see that file's module docstring.
 app.all(["/mcp", "/mcp/"], mcpProtocolHandler);
 
-// x402 payment gate sits in front of /mcp. It only intercepts the 7
-// specific POST routes it's configured for (src/x402.js) — GET /mcp/tools
-// stays free for discovery. If OKX payment credentials aren't set, this
-// is null and every /mcp/* route runs unmetered: fine for local dev,
-// never acceptable for a real OKX-facing deployment. isPaymentConfigured()
-// is also reported in GET /mcp/tools so an unmetered deployment is
-// self-documenting to anyone/anything calling it, including OKX's own
-// review process.
-let paymentGate = null;
-try {
-  paymentGate = await buildPaymentMiddleware();
-} catch (err) {
-  // Never let a facilitator-side problem (bad creds, network hiccup, SDK
-  // shape mismatch) take the whole app down and strand every route,
-  // including /mcp itself, behind a crash loop. Log loud, run unmetered.
-  console.error("buildPaymentMiddleware() threw — /mcp/* routes running UNMETERED:", err);
-}
+// Free MCP control surface + catalog (must NOT sit behind the x402 gate):
+// OKX's evaluator (and any MCP client) sends POST /mcp/ {initialize} and
+// GET/POST tools/list with no payment, and the gate would 404 any path not
+// in its priced-route map — which would make the endpoint read as invalid.
+// Serve these free, ahead of the gated REST router below.
+app.get("/mcp/tools", (_req, res) => {
+  res.json({
+    tools: TOOLS.map((t) => ({
+      name: t.name,
+      description: t.invoke?.price ? `${t.description} Price: ${t.invoke.price}.` : t.description,
+      inputSchema: t.inputSchema,
+    })),
+    payment: isPaymentConfigured()
+      ? { scheme: "x402", network: "eip155:196" }
+      : { scheme: "none", note: "Payment not configured on this deployment — routes are currently unmetered." },
+  });
+});
+
+// x402 payment gate sits in front of the /mcp REST routes. It only
+// intercepts the 25 specific POST /mcp/<skill> routes declared in
+// src/x402.js — discovery (above) stays free. If OKX payment credentials
+// aren't set, paymentGate is null and every /mcp/* route runs unmetered
+// (fine for local dev, never acceptable for a real OKX-facing deploy).
+// isPaymentConfigured() is reported by GET /mcp/tools so an unmetered
+// deployment is self-documenting to anything calling it, including OKX's
+// own review process. NOTE: the gate is scoped to this router only — it is
+// NOT mounted globally — so POST /mcp/ (initialize) and GET /mcp/tools are
+// never intercepted by it (mounted after the app.all/app.get above).
 if (paymentGate) {
-  app.use(paymentGate);
-} else if (IS_DEPLOYED) {
-  console.warn(
-    "x402 payment not configured (OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE / PAY_TO_ADDRESS). " +
-      "/mcp/* routes are running UNMETERED in production. Set these before this ASP goes live on OKX."
-  );
+  app.use("/mcp", paymentGate, mcpRoutes);
+} else {
+  app.use("/mcp", mcpRoutes);
 }
-app.use("/mcp", mcpRoutes);
 
 // /mcp/tools (GET, free) lists all 7 skills including price + invoke path.
 // The 6 single-skill routes and /mcp/full-package (the $2 bundle) are the
